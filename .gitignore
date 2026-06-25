@@ -4,3 +4,6 @@
 # Окрім задеплоєного застосунку
 !index.html
 !.gitignore
+!manifest.json
+!icon-192.png
+!icon-512.png
