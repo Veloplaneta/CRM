@@ -14779,7 +14779,11 @@ function LoginScreen({onLogin}){
     setLoading(true);setErr('');
     const{data,error}=await SB.auth.signInWithPassword({email:email.trim(),password:pw});
     if(error){setErr(error.message.includes('Invalid')?'Невірний email або пароль':error.message);setLoading(false);}
-    else onLogin(data.user);
+    else{
+      const ok=await onLogin(data.user);
+      // якщо профіль не завантажився — LoginScreen ще на екрані: показуємо помилку замість вічного "Вхід..."
+      if(!ok){setErr('Вхід пройшов, але профіль не завантажився. Спробуйте ще раз за хвилину.');setLoading(false);}
+    }
   }
 
   return(
@@ -14851,13 +14855,25 @@ function AppRoot(){
   },[]);
 
   async function loadProfile(userId){
-    const{data}=await SB.from('profiles').select('*').eq('id',userId).single();
+    let data=null;
+    // до 4 спроб: Supabase інколи видає токен з iat "у майбутньому" (clock skew) — PGRST303
+    for(let i=0;i<4;i++){
+      const r=await SB.from('profiles').select('*').eq('id',userId).single();
+      data=r.data;
+      if(data)break;
+      if(r.error&&/issued at future|PGRST303/i.test(r.error.message||'')){
+        await new Promise(res=>setTimeout(res,3000));
+        continue;
+      }
+      break;
+    }
     setProfile(data||null);
     setAuthReady(true);
+    return data;
   }
 
   async function handleLogin(user){
-    await loadProfile(user.id);
+    return await loadProfile(user.id);
   }
 
   async function handleLogout(){
