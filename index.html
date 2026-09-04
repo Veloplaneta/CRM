@@ -126,6 +126,9 @@ body.dark .mob-bottomnav{background:#161923;border-color:#2d3348}
   .mob-tabs::-webkit-scrollbar{display:none}
   .mob-tabs button{flex:0 0 auto;white-space:nowrap;padding:8px 10px!important;font-size:12px!important}
 
+  /* Двоколонкові сітки → стовпчик на мобільному (Контакти/Деталі тощо) */
+  .mob-stack{grid-template-columns:1fr!important}
+
   /* Графік обігу по фінроку: скрол замість стискання (як сезонність) */
   .mob-fychart{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
   .mob-fychart>div{min-width:40px}
@@ -5340,7 +5343,7 @@ function ClientDetail({client,clients,setClients,activities,setActivities,preOrd
 
       {tab==='info'&&(
         <>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
+        <div className="mob-stack" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
           <div className="card">
             <div style={{fontWeight:600,marginBottom:10}}>Контакти</div>
             {client.contacts?.length?client.contacts.map((ct,i)=>(
@@ -7446,7 +7449,7 @@ function Analytics({clients,mgr,goals={}}){
             ))}
           </div>
         </div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
+        <div className="mob-stack" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
           <div className="card">
             <div style={{fontWeight:600,marginBottom:10}}>По типу клієнтів</div>
             {byType.map(t=>{const tc=TYPE_COLORS[t.type]||TYPE_COLORS.other;return(
@@ -7768,7 +7771,7 @@ function Analytics({clients,mgr,goals={}}){
           <div style={{fontSize:10,color:'#9ba3af',marginTop:4}}>Верхній рядок — оборот, нижній — кількість клієнтів</div>
         </div>
 
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginBottom:14}}>
+        <div className="mob-stack" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginBottom:14}}>
           {/* By manager */}
           {abcMgrList.length>0&&(
             <div className="card">
@@ -8131,7 +8134,7 @@ function Analytics({clients,mgr,goals={}}){
         </div>
 
         {/* Відтік і нові клієнти */}
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
+        <div className="mob-stack" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
           <div className="card">
             <div style={{fontWeight:600,marginBottom:2}}>Відтік клієнтів у поточному ФР</div>
             <div style={{fontSize:11,color:'#9ba3af',marginBottom:10}}>Купували в минулому ФР — не купували в поточному</div>
@@ -8206,7 +8209,7 @@ function Analytics({clients,mgr,goals={}}){
           ))}
         </div>
 
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginBottom:14}}>
+        <div className="mob-stack" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginBottom:14}}>
 
           {/* Aging buckets */}
           <div className="card">
@@ -8427,7 +8430,7 @@ function Analytics({clients,mgr,goals={}}){
           <div style={{marginTop:8,fontSize:10,color:'#9ba3af'}}>Прогноз = середнє по попередніх роках для кожного місяця × коефіцієнт зростання {fmt(gFactor,2)}</div>
         </div>
 
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginBottom:14}}>
+        <div className="mob-stack" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginBottom:14}}>
 
           {/* 3 сценарії */}
           <div className="card">
@@ -14739,7 +14742,7 @@ ${note?`<div class="note">${note}</div>`:''}
 
   return(
     <div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
+      <div className="mob-stack" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
         {/* Left: catalog */}
         <div>
           <div className="card" style={{marginBottom:10}}>
