@@ -3991,7 +3991,7 @@ function App(){
           {page==='sync'&&<><MigrateButton clients={clientsRaw} activities={activities} tasks={tasks} projects={projects} preOrders={preOrders} leads={leads}/><OnecSync clients={clients} setClients={setClients} preOrders={preOrders} setPreOrders={setPreOrders}/></>}
           {showSearch&&<GlobalSearch clients={clients} leads={leads} activities={activities} onOpenClient={c=>{openClient(c);setShowSearch(false);}} onClose={()=>setShowSearch(false)}/>}
           {page==='map'&&<UkraineMap clients={clients} leads={leads} onOpenClient={openClient} mgr={mgr} focusClient={mapFocusClient} onFocusConsumed={()=>setMapFocusClient(null)} showYoY={showYoY} tripHighlight={mapTripHighlight} onTripHighlightConsumed={()=>setMapTripHighlight(null)}/>}
-          {page==='trips'&&<TripPlanner clients={clients} setClients={setClients} activities={activities} setActivities={setActivities} preOrders={preOrdersN} mgr={mgr} showYoY={showYoY} tripInit={tripInit} onTripInitConsumed={()=>setTripInit(null)}/>}
+          {page==='trips'&&<TripPlanner clients={clients} setClients={setClients} activities={activities} setActivities={setActivities} preOrders={preOrdersN} mgr={mgr} apiKey={apiKey} showYoY={showYoY} tripInit={tripInit} onTripInitConsumed={()=>setTripInit(null)}/>}
           {page==='auto'&&<AutomationPage clients={clients} setClients={setClients} tasks={tasks} setTasks={setTasks} leads={leads}/>}
           {page==='season'&&<SeasonPlanner tasks={tasks} setTasks={setTasks}/>}
           {page==='compare'&&<ClientCompare clients={clients} onOpenClient={openClient}/>}
@@ -4373,6 +4373,41 @@ function MyDay({clients,setClients,activities,setActivities,tasks,setTasks,proje
         onClose={()=>setEditTask(null)}/>}
     </div>
   );
+}
+
+// ── AI: причесати надиктовану нотатку → структурований JSON ──────────────────
+async function aiPolishNote(raw,apiKey,opts={}){
+  if(!raw||!raw.trim())throw new Error('Порожня нотатка');
+  if(!apiKey)throw new Error('Вкажіть Anthropic API ключ у лівій панелі');
+  const today=opts.today||new Date().toISOString().slice(0,10);
+  const prompt=`Ти — асистент CRM гуртового відділу Велопланета (велосипеди). Менеджер надиктував нотатку про контакт із клієнтом. Причеши текст:
+- прибери слова-паразити, повтори, вставні звуки («е-е», «ну», «коротше», «типу»);
+- виправ очевидні помилки розпізнавання мовлення (назви брендів, міст, велотермінів);
+- збережи ВСІ факти, суми, дати, імена й назви — нічого не вигадуй і не додавай від себе;
+- пиши українською, коротко й по-діловому.
+Окремо витягни з тексту (тільки якщо явно згадано, інакше null):
+- dealAmount: сума потенційної угоди/замовлення, тільки число без валюти;
+- followUp: наступний крок/домовленість, короткий рядок;
+- followUpDate: дата наступного кроку у форматі YYYY-MM-DD. Сьогодні ${today} — відносні дати («завтра», «до п'ятниці», «через тиждень») рахуй від цієї дати.
+Сирий текст:
+${raw}
+Поверни ТІЛЬКИ JSON без пояснень і без markdown:
+{"note":"","dealAmount":null,"followUp":null,"followUpDate":null}`;
+  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})});
+  const d=await r.json().catch(()=>null);
+  if(!d)throw new Error('API помилка '+r.status);
+  if(d.error)throw new Error(d.error.message||'Помилка API');
+  const t=d.content?.[0]?.text||'';
+  const jm=t.match(/\{[\s\S]*\}/);
+  if(!jm)throw new Error('Не вдалось розпізнати відповідь AI');
+  const p=JSON.parse(jm[0]);
+  const num=v=>{const n=typeof v==='number'?v:parseFloat(String(v??'').replace(/[^\d.,-]/g,'').replace(',','.'));return isFinite(n)&&n>0?n:null;};
+  return{
+    note:(typeof p.note==='string'&&p.note.trim())?p.note.trim():raw.trim(),
+    dealAmount:num(p.dealAmount),
+    followUp:(typeof p.followUp==='string'&&p.followUp.trim())?p.followUp.trim():null,
+    followUpDate:(typeof p.followUpDate==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(p.followUpDate.trim()))?p.followUpDate.trim():null
+  };
 }
 
 function ScriptModal({client,onClose,season,apiKey}){
@@ -5498,7 +5533,7 @@ function ClientDetail({client,clients,setClients,activities,setActivities,preOrd
       )}
 
       {tab==='acts'&&(
-        <ActivityLog client={client} acts={myActs} setActivities={setActivities}/>
+        <ActivityLog client={client} acts={myActs} setActivities={setActivities} apiKey={apiKey}/>
       )}
 
       {tab==='site'&&(
@@ -6170,9 +6205,24 @@ function ShopForm({shop,onSave,onCancel}){
 }
 
 // ── ActivityLog ───────────────────────────────────────────────────────────────
-function ActivityLog({client,acts,setActivities}){
+function ActivityLog({client,acts,setActivities,apiKey}){
   const[type,setType]=useState('call');
   const[note,setNote]=useState('');
+  const[polishing,setPolishing]=useState(false);
+
+  async function polishNote(){
+    const raw=note.trim();
+    if(!raw)return;
+    setPolishing(true);
+    try{
+      const res=await aiPolishNote(raw,apiKey,{today:new Date().toISOString().slice(0,10)});
+      let next=(res.note||raw).trim();
+      if(res.dealAmount)next+=`\n💰 Угода: $${res.dealAmount}`;
+      if(res.followUp)next+=`\n➡ Далі: ${res.followUp}${res.followUpDate?` (до ${res.followUpDate})`:''}`;
+      setNote(next);
+    }catch(e){alert('Помилка AI: '+(e.message||'запит не вдався'));}
+    setPolishing(false);
+  }
 
   function addAct(){
     if(!note.trim())return;
@@ -6193,7 +6243,10 @@ function ActivityLog({client,acts,setActivities}){
           ))}
         </div>
         <textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Нотатки..." style={{marginBottom:8,minHeight:70}}/>
-        <button className="grn" onClick={addAct} style={{fontSize:12}}>✓ Зберегти</button>
+        <div style={{display:'flex',gap:8}}>
+          <button className="grn" onClick={addAct} style={{fontSize:12}}>✓ Зберегти</button>
+          <button onClick={polishNote} disabled={polishing||!note.trim()} style={{fontSize:12,padding:'4px 10px',background:'#eff6ff',border:'1px solid #bfdbfe',color:'#2563eb',borderRadius:7,opacity:polishing||!note.trim()?0.55:1,cursor:polishing?'wait':'pointer'}}>{polishing?'⏳ Причісую…':'✨ Причесати'}</button>
+        </div>
       </div>
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {acts.length===0&&<div style={{color:'#9ba3af',fontSize:12,padding:16,textAlign:'center'}}>Активностей ще немає</div>}
@@ -6204,7 +6257,7 @@ function ActivityLog({client,acts,setActivities}){
               <span style={{fontWeight:600,fontSize:12}}>{ACT_TYPES[a.type]?.label||a.type}</span>
               <span style={{fontSize:11,color:'#9ba3af',marginLeft:'auto'}}>{new Date(a.date).toLocaleDateString('uk-UA',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span>
             </div>
-            <div style={{fontSize:12,color:'#4b5563'}}>{a.note}</div>
+            <div style={{fontSize:12,color:'#4b5563',whiteSpace:'pre-wrap'}}>{a.note}</div>
           </div>
         ))}
       </div>
@@ -12020,7 +12073,7 @@ function AddFromMapModal({data,onClose,onSaveLead,onSaveClient}){
 
 
 // ── TripPlanner (wizard) ─────────────────────────────────────────────────────
-function TripPlanner({clients,setClients,activities,setActivities,preOrders,mgr,showYoY,tripInit,onTripInitConsumed}){
+function TripPlanner({clients,setClients,activities,setActivities,preOrders,mgr,apiKey,showYoY,tripInit,onTripInitConsumed}){
   const[savedTrips,setSavedTrips]=useLS('crm_trips',[]);
   const[view,setView]=useState('list');// list | wizard
   const[trip,setTrip]=useState(null);// active trip object
@@ -12426,7 +12479,7 @@ function TripWizard({trip,step,setStep,updateTrip,clients,setClients,activities,
         {step===2&&<StepWho trip={trip} updateTrip={updateTrip} clients={clients} mgr={mgr} preOrders={preOrders} showYoY={showYoY}/>}
         {step===3&&<StepRoute trip={trip} updateTrip={updateTrip} clients={clients} kmlMatched={kmlMatched}/>}
         {step===4&&<StepGoals trip={trip} updateTrip={updateTrip} clients={clients} preOrders={preOrders}/>}
-        {step===5&&<StepExecute trip={trip} updateTrip={updateTrip} clients={clients} setClients={setClients} kmlMatched={kmlMatched} setActivities={setActivities}/>}
+        {step===5&&<StepExecute trip={trip} updateTrip={updateTrip} clients={clients} setClients={setClients} kmlMatched={kmlMatched} setActivities={setActivities} apiKey={apiKey}/>}
         {step===6&&<StepReport trip={trip} clients={clients} kmlMatched={kmlMatched}/>}
       </div>
 
@@ -12779,14 +12832,25 @@ function StepGoals({trip,updateTrip,clients,preOrders}){
 }
 
 // Step 5: Execution (live)
-function StepExecute({trip,updateTrip,clients,setClients,kmlMatched,setActivities}){
+function StepExecute({trip,updateTrip,clients,setClients,kmlMatched,setActivities,apiKey}){
   const[expandedId,setExpandedId]=useState(null);
+  const[polishingId,setPolishingId]=useState(null);
   const ordered=(trip.orderedIds||[]).map(id=>clients.find(c=>c.id===id)).filter(Boolean);
   const results=trip.results||{};
 
   function setResult(cid,patch){
     const cur=results[cid]||{};
     updateTrip({results:{...results,[cid]:{...cur,...patch}}});
+  }
+  async function polishNote(cid){
+    const r=results[cid]||{};
+    if(!(r.note||'').trim()){alert('Спочатку введіть або надиктуйте нотатку');return;}
+    setPolishingId(cid);
+    try{
+      const res=await aiPolishNote(r.note,apiKey,{today:new Date().toISOString().slice(0,10)});
+      setResult(cid,{note:res.note,dealAmount:res.dealAmount??r.dealAmount,followUp:(res.followUp?res.followUp+(res.followUpDate?' до '+res.followUpDate:''):r.followUp),savedToHistory:false});
+    }catch(e){alert('AI-причісування: '+e.message);}
+    setPolishingId(null);
   }
   function markVisited(cid){
     setResult(cid,{visited:true,visitedAt:new Date().toISOString()});
@@ -12844,6 +12908,9 @@ function StepExecute({trip,updateTrip,clients,setClients,kmlMatched,setActivitie
                   )}
                   {g.custom&&<div style={{fontSize:11,color:'#374151',marginBottom:8,whiteSpace:'pre-wrap',padding:6,background:'#f9fafb',borderRadius:5}}>{g.custom}</div>}
                   <textarea value={r.note||''} onChange={e=>setResult(c.id,{note:e.target.value,savedToHistory:false})} placeholder="Результат візиту, що домовились..." style={{width:'100%',minHeight:50,padding:6,border:'1px solid #e2e5eb',borderRadius:5,fontSize:12,resize:'vertical',boxSizing:'border-box'}}/>
+                  <div style={{display:'flex',justifyContent:'flex-end',marginTop:2}}>
+                    <button onClick={()=>polishNote(c.id)} disabled={polishingId===c.id||!(r.note||'').trim()} title={apiKey?'AI: структурувати нотатку, витягти суму угоди та follow-up':'Вкажіть Anthropic API ключ у лівій панелі'} style={{fontSize:11,padding:'3px 10px',background:polishingId===c.id?'#e5e7eb':'#f5f3ff',color:'#6d28d9',border:'1px solid #ddd6fe',borderRadius:5,cursor:polishingId===c.id?'wait':'pointer'}}>{polishingId===c.id?'⏳ Причісую...':'✨ Причесати'}</button>
+                  </div>
                   {/* Trip photos */}
                   <div style={{marginTop:6}}>
                     <div style={{fontSize:11,color:'#6b7280',marginBottom:4,fontWeight:600}}>📷 Фото візиту</div>
