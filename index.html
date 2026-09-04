@@ -82,13 +82,22 @@ body.dark .sticky-bar-flush{background:#0f1117}
   .kpi-grid{grid-template-columns:1fr 1fr!important;padding:12px}
   .kpi{padding:10px 10px!important}
   .kpi-val{font-size:18px!important}
-  .content{padding-bottom:20px}
+  .content{padding-bottom:84px}
   .mob-menu-btn{display:flex!important}
+  .mob-hide{display:none!important}
+  .mob-only{display:block!important}
+  .mob-bottomnav{display:flex!important}
   .topbar{height:auto;min-height:52px;flex-wrap:wrap;padding:8px 12px!important;gap:8px}
   input,select{font-size:16px!important}/* prevent iOS zoom */
   .row{flex-direction:column}
 }
 @media(min-width:769px){.mob-menu-btn{display:none!important}}
+.mob-only{display:none}
+.mob-bottomnav{display:none;position:fixed;bottom:0;left:0;right:0;z-index:400;background:#fff;border-top:1px solid #e8eaf0;padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -2px 10px rgba(0,0,0,0.06)}
+.mob-bottomnav .bn-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 0 6px;font-size:10px;color:#6b7280;cursor:pointer;border:none;background:transparent;min-height:0}
+.mob-bottomnav .bn-item .bn-ico{font-size:19px;line-height:1.1}
+.mob-bottomnav .bn-item.active{color:#2563eb;font-weight:700}
+body.dark .mob-bottomnav{background:#161923;border-color:#2d3348}
 /* Touch-friendly tap targets */
 @media(hover:none){
   .nav-item{padding:10px 14px}
@@ -3875,6 +3884,16 @@ function App(){
             <span>➕</span><span>Новий клієнт</span>
           </div>
         </div>
+        {/* Avg-перемикач у меню (лише мобільний — на десктопі він у топбарі) */}
+        <div className="mob-only" style={{padding:'8px 10px',borderTop:'1px solid #f0f2f7'}}>
+          <div style={{fontSize:10,color:'#9ba3af',marginBottom:5,fontWeight:600}}>Період Avg</div>
+          <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+            {[['3m','3м'],['6m','6м'],['12m','12м'],['fy','Фін.р'],['all','Активні']].map(([v,l])=>(
+              <button key={v} onClick={()=>setAvgPeriod(v)} style={{fontSize:11,padding:'5px 11px',borderRadius:20,border:`1px solid ${avgPeriod===v?'#2563eb':'#e2e5eb'}`,background:avgPeriod===v?'#2563eb':'#fff',color:avgPeriod===v?'#fff':'#6b7280',cursor:'pointer',fontWeight:avgPeriod===v?600:400}}>{l}</button>
+            ))}
+            <button onClick={()=>setShowYoY(v=>!v)} style={{fontSize:11,padding:'5px 11px',borderRadius:20,border:`1px solid ${showYoY?'#7c3aed':'#e2e5eb'}`,background:showYoY?'#7c3aed':'#fff',color:showYoY?'#fff':'#6b7280',cursor:'pointer',fontWeight:showYoY?600:400}}>↕ рік</button>
+          </div>
+        </div>
         {/* Manager filter */}
         <div style={{padding:'10px',borderTop:'1px solid #f0f2f7'}}>
           <select value={mgr} onChange={e=>setMgr(e.target.value)} style={{fontSize:11,marginBottom:7}}>
@@ -3902,7 +3921,7 @@ function App(){
             {page==='client'&&selectedClient&&` / ${selectedClient.name||selectedClient.shopName}`}
           </span>
           <div style={{flex:1}}/>
-          <div title="Період розрахунку середнього виторгу" style={{display:'flex',alignItems:'center',gap:4,fontSize:11}}>
+          <div className="mob-hide" title="Період розрахунку середнього виторгу" style={{display:'flex',alignItems:'center',gap:4,fontSize:11}}>
             <span style={{color:'#9ba3af',marginRight:2}}>Avg:</span>
             {[['3m','3м'],['6m','6м'],['12m','12м'],['fy','Фін.р'],['all','Активні']].map(([v,l])=>(
               <button key={v} onClick={()=>setAvgPeriod(v)} style={{fontSize:10,padding:'3px 9px',borderRadius:20,border:`1px solid ${avgPeriod===v?'#2563eb':'#e2e5eb'}`,background:avgPeriod===v?'#2563eb':'#fff',color:avgPeriod===v?'#fff':'#6b7280',cursor:'pointer',fontWeight:avgPeriod===v?600:400}}>{l}</button>
@@ -3910,13 +3929,13 @@ function App(){
             <button onClick={()=>setShowYoY(v=>!v)} title="Порівнює середній місячний оборот клієнта за обраний період з тим самим періодом минулого року. Допомагає виявити клієнтів що стали купувати менше." style={{fontSize:10,padding:'3px 9px',borderRadius:20,border:`1px solid ${showYoY?'#7c3aed':'#e2e5eb'}`,background:showYoY?'#7c3aed':'#fff',color:showYoY?'#fff':'#6b7280',cursor:'pointer',marginLeft:2,fontWeight:showYoY?600:400}}>↕ рік</button>
           </div>
           <button onClick={()=>setShowSearch(true)} style={{fontSize:11,padding:'4px 11px',borderRadius:20,border:'1px solid #e2e5eb',color:'#6b7280',display:'flex',alignItems:'center',gap:5}}>
-            🔍 Пошук <kbd style={{fontSize:10,background:'#f4f6f9',borderRadius:4,padding:'1px 4px',border:'1px solid #e2e5eb'}}>⌘K</kbd>
+            🔍 <span className="mob-hide" style={{display:'inline-flex',alignItems:'center',gap:5}}>Пошук <kbd style={{fontSize:10,background:'#f4f6f9',borderRadius:4,padding:'1px 4px',border:'1px solid #e2e5eb'}}>⌘K</kbd></span>
           </button>
-          <span style={{fontSize:12,color:'#6b7280'}}>
+          <span className="mob-hide" style={{fontSize:12,color:'#6b7280'}}>
             {new Date().toLocaleDateString('uk-UA',{weekday:'short',day:'numeric',month:'short'})}
           </span>
           <button onClick={()=>setDarkMode(p=>!p)} style={{fontSize:14,border:'none',background:'transparent',cursor:'pointer',padding:'4px 8px'}} title="Тема">{darkMode?'☀️':'🌙'}</button>
-          <span style={{fontSize:12,padding:'3px 10px',borderRadius:20,...{background:si.bg,color:si.color}}}>{si.label}</span>
+          <span className="mob-hide" style={{fontSize:12,padding:'3px 10px',borderRadius:20,...{background:si.bg,color:si.color}}}>{si.label}</span>
           {profile&&<div style={{display:'flex',alignItems:'center',gap:6,marginLeft:4}}>
             <span style={{fontSize:11,padding:'3px 10px',borderRadius:20,background:profile.role==='director'?'#fef9c3':'#eff6ff',color:profile.role==='director'?'#92400e':'#1e40af',fontWeight:600,border:'1px solid '+(profile.role==='director'?'#fcd34d':'#bfdbfe')}}>
               {profile.role==='director'?'👑':'👤'} {profile.name}
@@ -3945,6 +3964,25 @@ function App(){
           {page==='compare'&&<ClientCompare clients={clients} onOpenClient={openClient}/>}
           {page==='addclient'&&<ClientForm onSave={c=>{setClients(p=>[...p,{...c,id:uid()}]);setPage('clients');}} onCancel={()=>setPage('clients')}/>}
         </div>
+      </div>
+
+      {/* Нижнє меню (лише мобільний) */}
+      <div className="mob-bottomnav">
+        {[['clients','Клієнти'],['preorders','Передзам.'],['debt','Дебіторка'],['taskmanager','Задачі']].map(([id,shortLabel])=>{
+          const n=nav.find(x=>x.id===id);
+          if(!n)return null;
+          const active=page===id||(page==='client'&&id==='clients');
+          return(
+            <button key={id} className={`bn-item${active?' active':''}`} onClick={()=>{setPage(id);if(id!=='clients')setSelectedClientId(null);setSidebarOpen(false);}}>
+              <span className="bn-ico">{n.icon}</span>
+              <span>{shortLabel}</span>
+            </button>
+          );
+        })}
+        <button className="bn-item" onClick={()=>setSidebarOpen(true)}>
+          <span className="bn-ico">☰</span>
+          <span>Ще</span>
+        </button>
       </div>
     </div>
   );
