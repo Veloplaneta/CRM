@@ -270,7 +270,7 @@ function useLS(k,def){
 // opts.poll=false — без періодичного опитування (для статичних таблиць)
 // opts.cacheOnly=true — якщо в localStorage вже є дані, не тягнути з SB взагалі
 //   (для великих статичних таблиць типу pre_orders ~32k записів)
-function useSBTable(table,lsKey,init,{mgrField=null,poll=true,cacheOnly=false}={}){
+function useSBTable(table,lsKey,init,{mgrField=null,poll=true,cacheOnly=false,snapshot=false}={}){
   const[items,setItemsRaw]=useState(()=>lzLoad(lsKey,init));
   const sbLoaded=useRef(false);
   const syncTimer=useRef(null);
@@ -286,7 +286,37 @@ function useSBTable(table,lsKey,init,{mgrField=null,poll=true,cacheOnly=false}={
     });
   },[table,lsKey]);
 
+  // snapshot-режим для великих таблиць (pre_orders ~32k):
+  // 1 легкий запит перевіряє max(updated_at); якщо в хмарі щось змінилось —
+  // повне посторінкове перечитування (Supabase віддає макс 1000 рядків/запит)
+  const loadSnapshot=useCallback(async()=>{
+    try{
+      const probe=await _sbR('/rest/v1/'+table+'?select=updated_at&order=updated_at.desc.nullslast&limit=1');
+      const remoteTs=(probe&&probe[0]&&probe[0].updated_at)||null;
+      const localTs=localStorage.getItem(lsKey+'_ts');
+      const cached=lzLoad(lsKey,null);
+      const haveCache=Array.isArray(cached)&&cached.length>0;
+      if((!probe||!probe.length)||(haveCache&&remoteTs&&localTs===remoteTs)){
+        sbLoaded.current=true;return; // хмара порожня або без змін
+      }
+      const all=[];let off=0;
+      while(true){
+        const rows=await _sbR('/rest/v1/'+table+'?select=data&order=id.asc&limit=1000&offset='+off);
+        if(!Array.isArray(rows)||!rows.length)break;
+        all.push(...rows.map(r=>r.data).filter(Boolean));
+        if(rows.length<1000)break;
+        off+=1000;
+      }
+      if(all.length>0){
+        setItemsRaw(all);lzSave(lsKey,all);
+        if(remoteTs)localStorage.setItem(lsKey+'_ts',remoteTs);
+      }
+      sbLoaded.current=true;
+    }catch(e){sbLoaded.current=true;}
+  },[table,lsKey]);
+
   useEffect(()=>{
+    if(snapshot){loadSnapshot();return;}
     // cacheOnly: якщо локально вже є дані — не вантажимо з SB (статична велика таблиця)
     const cached=lzLoad(lsKey,null);
     if(cacheOnly&&Array.isArray(cached)&&cached.length>0){
@@ -297,7 +327,7 @@ function useSBTable(table,lsKey,init,{mgrField=null,poll=true,cacheOnly=false}={
     if(!poll)return;
     const pollTimer=setInterval(loadFromSB,30000);
     return()=>clearInterval(pollTimer);
-  },[loadFromSB,poll,cacheOnly,lsKey]);
+  },[loadFromSB,loadSnapshot,poll,cacheOnly,snapshot,lsKey]);
 
   const setItems=useCallback((updater)=>{
     setItemsRaw(prev=>{
@@ -312,11 +342,14 @@ function useSBTable(table,lsKey,init,{mgrField=null,poll=true,cacheOnly=false}={
           const rows=next.map(item=>{const row={id:item.id,data:item};if(mgrField)row.manager=item[mgrField]||'';return row;});
           if(rows.length>0)SB.from(table).upsert(rows);
           deleted.forEach(id=>SB.from(table).delete().eq('id',id));
+          // після власного запису хмарний max(updated_at) зміниться — скидаємо мітку,
+          // щоб наступне відкриття перечитало канонічний знімок
+          if(snapshot)localStorage.removeItem(lsKey+'_ts');
         },800);
       }
       return next;
     });
-  },[table,lsKey,mgrField]);
+  },[table,lsKey,mgrField,snapshot]);
 
   return[items,setItems];
 }
@@ -3709,7 +3742,7 @@ function App(){
   const abcMap=useMemo(()=>calcAbcMap(clients),[clients]);
   const[leads,setLeads]=useSBTable('leads','crm_leads',LEADS_INIT,{mgrField:'manager'});
   const[activities,setActivities]=useSBTable('activities','crm_activities',[]);
-  const[preOrders,setPreOrders]=useSBTable('pre_orders','crm_preorders',[],{poll:false,cacheOnly:true});
+  const[preOrders,setPreOrders]=useSBTable('pre_orders','crm_preorders',[],{poll:false,snapshot:true});
   const preOrdersN=useMemo(()=>preOrders.map(o=>o.brand===normalizeBrand(o.brand)?o:{...o,brand:normalizeBrand(o.brand)}),[preOrders]);
   const[tasks,setTasks]=useSBTable('tasks','crm_tasks',[]);
   const[projects,setProjects]=useSBTable('projects','crm_projects',[]);
@@ -9901,6 +9934,16 @@ function GS_PreordersSync({clients,preOrders,setPreOrders}){
     return m?Number(m[1]):fy.start;
   }
 
+  // Новий фінрік → автоматично переключаємось на його вкладку (напр. "2026-2027"),
+  // якщо збережена назва — теж FY-формату, але від минулого року
+  const curFySheet=`${fy.start}-${fy.end}`;
+  useEffect(()=>{
+    if(/^\d{4}-\d{4}$/.test(sheetName)&&sheetName!==curFySheet){
+      setSheetName(curFySheet);
+      setSyncFyStart(String(fy.start));
+    }
+  },[]);
+
   const _doFetchPORef=useRef(null);
   _doFetchPORef.current=()=>doFetch(false);
   useEffect(()=>{
@@ -9976,7 +10019,11 @@ function GS_PreordersSync({clients,preOrders,setPreOrders}){
       if(json.error)throw new Error(json.error);
       const sheets=(Array.isArray(json)?json:[]).map(row=>Array.isArray(row)?row[0]:row).filter(Boolean);
       setAvailSheets(sheets);
-      const autoSel=new Set(sheets.filter(s=>{const mk=sheetNameToMonthKey(s);return mk&&mk>='2024-09';}));
+      // авто-вибір: вкладки фінроків ("2025-2026", "2026-2027"...), або місячні з Вер 2024
+      const fySheets=sheets.filter(s=>/^\d{4}\s*[-–]\s*\d{4}$/.test((s||'').trim()));
+      const autoSel=fySheets.length
+        ?new Set(fySheets)
+        :new Set(sheets.filter(s=>{const mk=sheetNameToMonthKey(s);return mk&&mk>='2024-09';}));
       setSelectedSheets(autoSel.size?autoSel:new Set(sheets));
     }catch(e){setError(e.message);}
     setLoadingSheets(false);
@@ -10163,7 +10210,14 @@ function GS_PreordersSync({clients,preOrders,setPreOrders}){
           <summary style={{fontSize:12,color:'#6b7280',cursor:'pointer',userSelect:'none',padding:'4px 0'}}>▸ Одиночне завантаження (з попереднім переглядом)</summary>
           <div style={{paddingTop:8,display:'flex',gap:12,flexWrap:'wrap',alignItems:'flex-end'}}>
             <div><label>Назва аркуша</label>
-              <input value={sheetName} onChange={e=>setSheetName(e.target.value)} placeholder="2025-2026" style={{width:140}}/>
+              <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                <input value={sheetName} onChange={e=>setSheetName(e.target.value)} placeholder={curFySheet} style={{width:140}}/>
+                {sheetName!==curFySheet&&(
+                  <button onClick={()=>{setSheetName(curFySheet);setSyncFyStart(String(fy.start));}} title="Поточний фінансовий рік" style={{fontSize:11,padding:'5px 10px',borderRadius:7,border:'1px solid #bfdbfe',background:'#eff6ff',color:'#2563eb',cursor:'pointer',whiteSpace:'nowrap'}}>
+                    → {curFySheet}
+                  </button>
+                )}
+              </div>
             </div>
             <div><label>Сезон (рік початку)</label>
               <input value={syncFyStart} onChange={e=>setSyncFyStart(e.target.value)} placeholder="2025" style={{width:80}}/>
