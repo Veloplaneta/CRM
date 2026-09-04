@@ -5678,6 +5678,23 @@ function ShopsTab({client,onUpdateClient,clientId}){
   const[photoExpanded,setPhotoExpanded]=useState(null);// {shopId, photoIndex}
   const visitResults=client.visitResults||[];
 
+  // Пересинхронізація з даними клієнта: фото, додані з іншого пристрою,
+  // з'являються після чергового 30с-поллінгу без перезавантаження сторінки
+  useEffect(()=>{setShops(client.shops||[]);},[client.shops]);
+
+  // Клавіатурна навігація в лайтбоксі: ← → Esc
+  // capture:true + stopPropagation — щоб Esc закривав лайтбокс, а не картку клієнта
+  useEffect(()=>{
+    if(!photoExpanded)return;
+    const h=e=>{
+      if(e.key==='Escape'){e.stopPropagation();setPhotoExpanded(null);}
+      else if(e.key==='ArrowRight'){e.stopPropagation();setPhotoExpanded(p=>p?{...p,photoIndex:p.photoIndex+1}:p);}
+      else if(e.key==='ArrowLeft'){e.stopPropagation();setPhotoExpanded(p=>p?{...p,photoIndex:p.photoIndex-1}:p);}
+    };
+    window.addEventListener('keydown',h,true);
+    return()=>window.removeEventListener('keydown',h,true);
+  },[photoExpanded]);
+
   // Read saved site analysis from localStorage
   function getSiteAnalysis(){
     try{
@@ -5757,7 +5774,7 @@ function ShopsTab({client,onUpdateClient,clientId}){
               {/* Photo gallery or placeholder */}
               {photos.length>0?(
                 <div style={{height:160,position:'relative',background:'#000',overflow:'hidden'}}>
-                  <img src={photos[0]} alt={shop.name} style={{width:'100%',height:'100%',objectFit:'cover',opacity:0.95}}/>
+                  <img src={photos[0]} alt={shop.name} onClick={()=>setPhotoExpanded({shopId:shop.id,photoIndex:0})} style={{width:'100%',height:'100%',objectFit:'cover',opacity:0.95,cursor:'zoom-in'}}/>
                   {photos.length>1&&(
                     <div style={{position:'absolute',bottom:8,left:'50%',transform:'translateX(-50%)',display:'flex',gap:4}}>
                       {photos.map((_,pi)=>(
@@ -5866,22 +5883,35 @@ function ShopsTab({client,onUpdateClient,clientId}){
         </div>
       )}
 
-      {/* Photo lightbox */}
+      {/* Photo lightbox: стрілки, ←/→/Esc, свайп, лічильник */}
       {photoExpanded&&(()=>{
-        let src='';
+        let phs=[];
         if(photoExpanded.shopId){
           const sh=shops.find(s=>s.id===photoExpanded.shopId);
-          const phs=sh?.photos||(sh?.photo?[sh.photo]:[]);
-          src=phs[photoExpanded.photoIndex]||'';
+          phs=sh?.photos||(sh?.photo?[sh.photo]:[]);
         } else if(photoExpanded.visitIdx!==undefined){
-          src=visitResults[photoExpanded.visitIdx]?.photos?.[photoExpanded.photoIndex]||'';
+          phs=visitResults[photoExpanded.visitIdx]?.photos||[];
         }
-        return src?(
-          <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:2000,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>setPhotoExpanded(null)}>
-            <img src={src} alt="" style={{maxWidth:'90vw',maxHeight:'90vh',objectFit:'contain',borderRadius:8}}/>
+        if(!phs.length)return null;
+        const idx=((photoExpanded.photoIndex%phs.length)+phs.length)%phs.length;
+        const go=d=>setPhotoExpanded(p=>p?{...p,photoIndex:idx+d}:p);
+        const navBtn={position:'absolute',top:'50%',transform:'translateY(-50%)',width:44,height:44,borderRadius:'50%',border:'none',background:'rgba(255,255,255,0.15)',color:'#fff',fontSize:24,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',userSelect:'none'};
+        return(
+          <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.88)',zIndex:2000,display:'flex',alignItems:'center',justifyContent:'center'}}
+            onClick={()=>setPhotoExpanded(null)}
+            onTouchStart={e=>{window._lbTouchX=e.touches[0].clientX;}}
+            onTouchEnd={e=>{const dx=e.changedTouches[0].clientX-(window._lbTouchX||0);if(Math.abs(dx)>50)go(dx<0?1:-1);}}>
+            <img src={phs[idx]} alt="" style={{maxWidth:'90vw',maxHeight:'86vh',objectFit:'contain',borderRadius:8}} onClick={e=>e.stopPropagation()}/>
+            {phs.length>1&&<button onClick={e=>{e.stopPropagation();go(-1);}} style={{...navBtn,left:14}}>‹</button>}
+            {phs.length>1&&<button onClick={e=>{e.stopPropagation();go(1);}} style={{...navBtn,right:14}}>›</button>}
+            {phs.length>1&&(
+              <div style={{position:'absolute',bottom:18,left:'50%',transform:'translateX(-50%)',color:'#fff',fontSize:13,background:'rgba(0,0,0,0.5)',padding:'4px 14px',borderRadius:20,userSelect:'none'}}>
+                {idx+1} / {phs.length}
+              </div>
+            )}
             <button onClick={()=>setPhotoExpanded(null)} style={{position:'absolute',top:16,right:16,width:36,height:36,borderRadius:'50%',border:'none',background:'rgba(255,255,255,0.2)',color:'#fff',fontSize:20,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
           </div>
-        ):null;
+        );
       })()}
     </div>
   );
