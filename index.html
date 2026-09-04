@@ -106,6 +106,32 @@ body.dark .mob-bottomnav{background:#161923;border-color:#2d3348}
 .mob-menu-btn{display:none;align-items:center;justify-content:center;width:34px;height:34px;flex-shrink:0;border-radius:8px;background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;font-size:18px;cursor:pointer;padding:0}
 .mob-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:499}
 
+/* ═══ Mobile UI pack: фільтри-згортки, картка клієнта, карта ═══ */
+.mob-filter-toggle{display:none}
+@media(max-width:768px){
+  /* Спільний патерн згортання фільтрів (ClientsList + DebtTracker) */
+  .mob-filter-toggle{display:inline-flex;align-items:center;gap:4px}
+  .mob-collapsible:not(.open){display:none!important}
+
+  /* ClientDetail: шапка + бейджі + кнопки дій + KPI + вкладки */
+  .mob-client-head{flex-wrap:wrap;gap:8px!important}
+  .mob-client-head h2{font-size:16px!important;line-height:1.2}
+  .mob-client-badges{gap:5px!important}
+  .mob-client-badges>span{font-size:10px!important;padding:1px 6px!important}
+  .mob-client-actions{width:100%;justify-content:flex-end;gap:6px!important}
+  .mob-client-actions button{padding:6px 10px!important}
+  .mob-kpi2{grid-template-columns:1fr 1fr!important;gap:8px!important}
+  .mob-kpi2 .kpi{padding:8px 10px!important}
+  .mob-tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin-bottom:10px!important}
+  .mob-tabs::-webkit-scrollbar{display:none}
+  .mob-tabs button{flex:0 0 auto;white-space:nowrap;padding:8px 10px!important;font-size:12px!important}
+
+  /* UkraineMap: мобільний layout карти */
+  .map-layout{height:calc(100vh - 165px)!important;height:calc(100dvh - 165px)!important;min-height:420px}
+  .map-canvas-wrap{z-index:0}
+  .map-side-panel{position:fixed!important;top:0!important;left:0!important;right:0!important;bottom:0!important;width:auto!important;z-index:1200!important;border-radius:0!important;padding-top:calc(10px + env(safe-area-inset-top))!important;padding-bottom:calc(10px + env(safe-area-inset-bottom))!important}
+}
+
 /* ── Print styles ── */
 @media print{
   .no-print{display:none!important}
@@ -4574,6 +4600,7 @@ function ClientsList({clients,onOpen,mgr,showYoY,abcMap={}}){
   const[region,setRegion]=useState('');
   const[statusFilter,setStatusFilter]=useState('');
   const[mgrFilter,setMgrFilter]=useState('');
+  const[showFilters,setShowFilters]=useState(false);
 
   const regions=[...new Set(clients.map(c=>c.region).filter(Boolean))].sort();
 
@@ -4701,10 +4728,16 @@ function ClientsList({clients,onOpen,mgr,showYoY,abcMap={}}){
       })()}
       {/* Tabs */}
       <div className="sticky-bar"><div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+        <div className={'mob-collapsible'+(showFilters?' open':'')} style={{display:'contents'}}>
         {[['all','Всі'],['physical','🏪 Фізичні'],['online','💻 Онлайн']].map(([t,l])=>(
           <button key={t} onClick={()=>setTab(t)} style={{padding:'5px 14px',fontSize:12,borderRadius:20,background:tab===t?'#2563eb':'#fff',color:tab===t?'#fff':'#4b5563',border:tab===t?'1px solid #2563eb':'1px solid #e2e5eb'}}>{l}</button>
         ))}
+        </div>
         <input placeholder="Пошук магазину, міста..." value={search} onChange={e=>setSearch(e.target.value)} style={{width:200,fontSize:12}}/>
+        {(()=>{const nAct=(tab!=='all'?1:0)+(region?1:0)+(statusFilter?1:0)+(sort!=='avg'?1:0);return(
+          <button className="mob-filter-toggle" onClick={()=>setShowFilters(v=>!v)} style={{fontSize:12,padding:'5px 12px',borderRadius:20,background:showFilters?'#eff6ff':'#fff',border:'1px solid '+(nAct>0||showFilters?'#2563eb':'#e2e5eb'),color:nAct>0||showFilters?'#2563eb':'#4b5563',fontWeight:nAct>0?600:400}}>{'⚙️ Фільтри'}{nAct>0?` (${nAct})`:''} {showFilters?'▲':'▼'}</button>
+        );})()}
+        <div className={'mob-collapsible'+(showFilters?' open':'')} style={{display:'contents'}}>
         <select value={region} onChange={e=>setRegion(e.target.value)} style={{width:140,fontSize:11}}>
           <option value=''>Всі регіони</option>
           {regions.map(r=><option key={r}>{r}</option>)}
@@ -4726,6 +4759,7 @@ function ClientsList({clients,onOpen,mgr,showYoY,abcMap={}}){
           const csv='ПІБ,Магазин,Місто,Регіон,Менеджер,Avg,Борг\n'+filtered.map(c=>[c.name,c.shopName,c.city,c.region,c.manager,c.avgMonthly,c.debt].join(',')).join('\n');
           const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);a.download='clients_export.csv';a.click();
         }} style={{fontSize:11,padding:'5px 11px',background:'#f0fdf4',border:'1px solid #86efac',color:'#16a34a',borderRadius:7}}>📥 CSV</button>
+        </div>
       </div></div>
       {/* List */}
       <div style={{display:'flex',flexDirection:'column',gap:6}}>
@@ -5254,10 +5288,10 @@ function ClientDetail({client,clients,setClients,activities,setActivities,preOrd
   return(
     <div style={{padding:'1.5rem'}}>
       {/* Header */}
-      <div style={{display:'flex',alignItems:'flex-start',gap:14,marginBottom:14}}>
+      <div className="mob-client-head" style={{display:'flex',alignItems:'flex-start',gap:14,marginBottom:14}}>
         <button onClick={onBack} style={{padding:'6px 12px',fontSize:12}}>← Назад</button>
         <div style={{flex:1}}>
-          <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+          <div className="mob-client-badges" style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
             <h2 style={{fontSize:20,fontWeight:800}}>{client.name||client.shopName||'—'}</h2>
             <span style={{...tc,padding:'2px 10px',borderRadius:12,fontSize:11,fontWeight:700}}>{CLIENT_TYPES[client.type]||client.type}</span>
             {client.b2b&&<span style={{background:'#eff6ff',color:'#2563eb',padding:'2px 8px',borderRadius:12,fontSize:11,fontWeight:700}}>B2B ✓</span>}
@@ -5270,15 +5304,15 @@ function ClientDetail({client,clients,setClients,activities,setActivities,preOrd
           </div>
           <div style={{color:'#6b7280',fontSize:13,marginTop:2}}>{client.name} · {client.city||client.region||'—'} · {client.manager}</div>
         </div>
-        <div style={{display:'flex',gap:8}}>
-          {onGoToMap&&<button onClick={()=>onGoToMap(client)} style={{fontSize:12,padding:'6px 12px',background:'#f0fdf4',border:'1px solid #86efac',color:'#16a34a',borderRadius:7}}>🗺️ На карті</button>}
-          <button onClick={()=>setShowPrint(true)} style={{fontSize:12,padding:'6px 12px',background:'#f9fafb',border:'1px solid #e2e5eb',borderRadius:7}}>🖨️ Друк</button>
-          <button className="pri" style={{fontSize:12}} onClick={()=>setEditing(true)}>✏️ Редагувати</button>
+        <div className="mob-client-actions" style={{display:'flex',gap:8}}>
+          {onGoToMap&&<button onClick={()=>onGoToMap(client)} style={{fontSize:12,padding:'6px 12px',background:'#f0fdf4',border:'1px solid #86efac',color:'#16a34a',borderRadius:7}}>🗺️<span className="mob-hide"> На карті</span></button>}
+          <button onClick={()=>setShowPrint(true)} style={{fontSize:12,padding:'6px 12px',background:'#f9fafb',border:'1px solid #e2e5eb',borderRadius:7}}>🖨️<span className="mob-hide"> Друк</span></button>
+          <button className="pri" style={{fontSize:12}} onClick={()=>setEditing(true)}>✏️<span className="mob-hide"> Редагувати</span></button>
         </div>
       </div>
 
       {/* KPI row */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:10,marginBottom:14}}>
+      <div className="mob-kpi2" style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:10,marginBottom:14}}>
         {[
           {l:'Avg/місяць',v:`$${fmt(client.avgMonthly)}`,c:'#2563eb'},
           {l:'Дебіторка',v:`$${fmt(client.debt)}`,c:client.debt>0?'#dc2626':'#16a34a'},
@@ -5294,7 +5328,7 @@ function ClientDetail({client,clients,setClients,activities,setActivities,preOrd
       </div>
 
       {/* Tabs */}
-      <div style={{display:'flex',gap:4,borderBottom:'1px solid #e8eaf0',marginBottom:14}}>
+      <div className="mob-tabs" style={{display:'flex',gap:4,borderBottom:'1px solid #e8eaf0',marginBottom:14}}>
         {[['info','Інфо'],['history','Історія'],['acts','Активності'],['tasks','✅ Задачі'+(myActiveTasks.length?` (${myActiveTasks.length})`:'')],['reclamations','⚠️ Рекламації'],['preorders','📦 Передзамовлення'],['shops','🏪 Магазини'+(client.shops?.length?` (${client.shops.length})`:'')],['brands','🧠 Бренд-профіль'],['site','🌐 Сайт'],['kp','📄 КП'],['ai','🤖 AI']].map(([t,l])=>(
           <button key={t} onClick={()=>setTab(t)} style={{border:'none',borderBottom:`2px solid ${tab===t?'#2563eb':'transparent'}`,background:'none',padding:'8px 16px',fontSize:13,color:tab===t?'#2563eb':'#6b7280',fontWeight:tab===t?600:400,cursor:'pointer',borderRadius:0}}>{l}</button>
         ))}
@@ -8489,6 +8523,8 @@ function DebtTracker({clients,setClients,activities,setActivities,onOpenClient,m
   const[statusFilter,setStatusFilter]=useState('');
   const[localMgr,setLocalMgr]=useState('');
   const[quickFilter,setQuickFilter]=useState('');
+  const[showFilters,setShowFilters]=useState(false);
+  const activeFilterCnt=(localMgr?1:0)+(statusFilter?1:0)+(groupBy!=='none'?1:0)+(sort!=='debt'?1:0);
 
   const debtors=useMemo(()=>{
     let list=clients.filter(c=>c.debt>0);
@@ -8639,11 +8675,14 @@ function DebtTracker({clients,setClients,activities,setActivities,onOpenClient,m
       })()}
       <div className="sticky-bar"><div style={{display:'flex',gap:8,marginBottom:8,alignItems:'center',flexWrap:'wrap'}}>
         <input placeholder="Пошук..." value={search} onChange={e=>setSearch(e.target.value)} style={{width:180,fontSize:12}}/>
+        <button className="mob-filter-toggle" onClick={()=>setShowFilters(p=>!p)} style={{fontSize:12,padding:'5px 12px',borderRadius:20,background:showFilters?'#eff6ff':'#fff',border:'1px solid '+(activeFilterCnt>0||showFilters?'#2563eb':'#e2e5eb'),color:activeFilterCnt>0||showFilters?'#2563eb':'#4b5563',fontWeight:activeFilterCnt>0?600:400}}>⚙️ Фільтри{activeFilterCnt>0?` (${activeFilterCnt})`:''} {showFilters?'▲':'▼'}</button>
+        <div className={'mob-collapsible'+(showFilters?' open':'')} style={{display:'contents'}}>
         {[['debt','За сумою'],['ratio','За ризиком'],['days','За днями'],['decline','↘ Падіння']].map(([s,l])=>(
           <button key={s} onClick={()=>setSort(s)} style={{fontSize:12,padding:'5px 12px',borderRadius:20,background:sort===s?'#dc2626':'#fff',color:sort===s?'#fff':'#4b5563',border:sort===s?'1px solid #dc2626':'1px solid #e2e5eb'}}>{l}</button>
         ))}
+        </div>
       </div>
-      <div style={{display:'flex',gap:8,marginBottom:12,alignItems:'center',flexWrap:'wrap'}}>
+      <div className={'mob-collapsible'+(showFilters?' open':'')} style={{display:'flex',gap:8,marginBottom:12,alignItems:'center',flexWrap:'wrap'}}>
         <span style={{fontSize:11,color:'#6b7280'}}>Менеджер:</span>
         <select value={localMgr} onChange={e=>setLocalMgr(e.target.value)} style={{fontSize:11,padding:'4px 8px',borderRadius:8,border:'1px solid #e2e5eb',background:'#fff',color:'#374151'}}>
           <option value=''>Всі</option>
@@ -10942,7 +10981,7 @@ function UkraineMap({clients,leads,onOpenClient,mgr,focusClient,onFocusConsumed,
   const[search,setSearch]=useState('');
   const[dotFilter,setDotFilter]=useState('all');// all | active | risk | overdue | debt
   const[showLeads,setShowLeads]=useState(false);
-  const[panelOpen,setPanelOpen]=useState(true);
+  const[panelOpen,setPanelOpen]=useState(window.innerWidth>768);
   const[kmlCoords,setKmlCoords]=useLS('kml_coords',KML_COORDS);
   const[kmlUrls]=useLS('kml_urls',['https://www.google.com/maps/d/kml?mid=1HIr-p3erCGxZLshwJCrgxU9e9IkKykw&forcekml=1','https://www.google.com/maps/d/kml?mid=1GLgtj2vapZmxPIhIX_65h_JxIpCxXR4&forcekml=1']);
   const[syncing,setSyncing]=useState(false);
@@ -11445,7 +11484,7 @@ function UkraineMap({clients,leads,onOpenClient,mgr,focusClient,onFocusConsumed,
   const top3=oblastClients.slice(0,3);
 
   return(
-    <div style={{display:'flex',height:'calc(100vh - 90px)',gap:8}}>
+    <div className="map-layout" style={{display:'flex',height:'calc(100vh - 90px)',gap:8}}>
       {/* Map area */}
       <div style={{flex:1,display:'flex',flexDirection:'column',minWidth:0}}>
         <div style={{display:'flex',gap:6,marginBottom:6,flexWrap:'wrap',alignItems:'center'}}>
@@ -11480,7 +11519,7 @@ function UkraineMap({clients,leads,onOpenClient,mgr,focusClient,onFocusConsumed,
             const openLeads=leadsArr.filter(l=>(mgr?l.manager===mgr:true)&&l.status!=='converted'&&l.status!=='rejected').length;
             const debtCl=filtered.filter(c=>c.debt>0).length;
             return(
-              <div style={{display:'flex',gap:6,alignItems:'center',flexShrink:0}}>
+              <div className="mob-hide" style={{display:'flex',gap:6,alignItems:'center',flexShrink:0}}>
                 <span style={{fontSize:11,color:'#4b5563',background:'#f3f4f7',border:'1px solid #e2e5eb',borderRadius:6,padding:'4px 9px',fontWeight:500}} title="Загальна кількість клієнтів">
                   👥 <b>{filtered.length}</b> кл.
                 </span>
@@ -11515,7 +11554,7 @@ function UkraineMap({clients,leads,onOpenClient,mgr,focusClient,onFocusConsumed,
             {mapTool==='route'&&routePts.length<2&&<span style={{fontSize:11,color:'#2563eb',fontWeight:600}}>Клікніть {routePts.length===0?'початок':'кінець'} маршруту</span>}
           </div>
         )}
-        <div style={{position:'relative',flex:1,minHeight:400}}>
+        <div className="map-canvas-wrap" style={{position:'relative',flex:1,minHeight:400}}>
           <div ref={mapRef} style={{position:'absolute',inset:0,borderRadius:8,overflow:'hidden',border:'1px solid #e2e5eb'}}/>
           {/* Ruler info overlay */}
           {mode==='detail'&&mapTool==='ruler'&&rulerPts.length>1&&(()=>{
@@ -11563,7 +11602,8 @@ function UkraineMap({clients,leads,onOpenClient,mgr,focusClient,onFocusConsumed,
 
       {/* Side panel */}
       {panelOpen&&(
-        <div style={{width:320,background:'#fff',border:'1px solid #e2e5eb',borderRadius:8,padding:10,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+        <div className="map-side-panel" style={{width:320,background:'#fff',border:'1px solid #e2e5eb',borderRadius:8,padding:10,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+          <button className="mob-only" onClick={()=>setPanelOpen(false)} style={{marginBottom:8,padding:'9px 12px',background:'#f3f4f7',border:'1px solid #e2e5eb',borderRadius:8,fontSize:13,fontWeight:600,color:'#374151',flexShrink:0}}>✕ Закрити панель</button>
           {/* Search */}
           <input type="text" value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Пошук клієнта (назва / місто)" style={{padding:'7px 10px',border:'1px solid #e2e5eb',borderRadius:7,fontSize:12,marginBottom:8}}/>
           {searchResults.length>0&&(
