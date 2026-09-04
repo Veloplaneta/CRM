@@ -6986,23 +6986,26 @@ function BrandProfileTab({client,preOrders}){
 }
 
 function PreOrdersTab({client,preOrders}){
-  const fy=getFinYear();
-  const prevFy={start:fy.start-1,end:fy.end-1};
-  const curOO=preOrders.filter(o=>o.clientId===client.id&&o.fyStart===fy.start);
-  const prevOO=preOrders.filter(o=>o.clientId===client.id&&o.fyStart===prevFy.start);
-  const allBrands=[...new Set([...curOO.map(o=>o.brand),...prevOO.map(o=>o.brand)])].sort();
+  const clientOO=preOrders.filter(o=>o.clientId===client.id);
+  // усі фінроки, за якими є дані у клієнта, від нового до старого
+  const years=[...new Set(clientOO.map(o=>o.fyStart).filter(Boolean))].sort((a,b)=>b-a);
+  const byYear={};
+  years.forEach(y=>{const m={};clientOO.forEach(o=>{if(o.fyStart===y)m[o.brand]=o;});byYear[y]=m;});
+  const allBrands=[...new Set(clientOO.map(o=>o.brand))].filter(Boolean).sort();
   const bikeBrands=allBrands.filter(b=>getBrandCat(b)==='bike');
   const tireBrands=allBrands.filter(b=>getBrandCat(b)==='tire');
   const toolBrands=allBrands.filter(b=>getBrandCat(b)==='tool');
   const otherBrands=allBrands.filter(b=>getBrandCat(b)==='other');
-  const curTot=curOO.reduce((s,o)=>s+(o.priceWholesale||0),0);
-  const prevTot=prevOO.reduce((s,o)=>s+(o.priceWholesale||0),0);
-  const totD=prevTot>0?((curTot-prevTot)/prevTot*100):null;
+  const totByYear={};
+  years.forEach(y=>{totByYear[y]=Object.values(byYear[y]).reduce((s,o)=>s+(o.priceWholesale||0),0);});
+  const y0=years[0],y1=years[1];
+  const totD=(y1!==undefined&&totByYear[y1]>0)?((totByYear[y0]-totByYear[y1])/totByYear[y1]*100):null;
   const gsC={'$+':'#16a34a','$+-':'#65a30d','$-':'#f59e0b','не жду':'#9ba3af','нет':'#d1d5db'};
   const gsB={'$+':'#f0fdf4','$+-':'#f7fee7','$-':'#fffbeb','не жду':'#f9fafb','нет':'#f9fafb'};
-  const th={padding:'6px 10px',fontSize:11,fontWeight:600,color:'#4b5563',borderBottom:'2px solid #e8eaf0'};
-  const sepCur={borderLeft:'2px solid #dbeafe'};
-  const sepPrev={borderLeft:'2px solid #e8eaf0'};
+  const th={padding:'5px 7px',fontSize:10,fontWeight:600,color:'#4b5563',borderBottom:'2px solid #e8eaf0',whiteSpace:'nowrap'};
+  const sepY=i=>({borderLeft:i===0?'2px solid #dbeafe':'2px solid #e8eaf0'});
+  const yC=i=>i===0?'#2563eb':'#9ba3af';
+  const nCols=3+years.length*2;
 
   if(!allBrands.length)return(
     <div style={{padding:'2rem',textAlign:'center',color:'#9ba3af'}}>
@@ -7012,99 +7015,108 @@ function PreOrdersTab({client,preOrders}){
   );
 
   function BLine({brand}){
-    const cur=curOO.find(o=>o.brand===brand),prev=prevOO.find(o=>o.brand===brand);
-    const cW=cur?.priceWholesale||0,pW=prev?.priceWholesale||0;
-    const d=pW>0?((cW-pW)/pW*100):null;
-    const gs=cur?.gsStatus;
+    const recs=years.map(y=>byYear[y][brand]);
+    const cW=recs[0]?.priceWholesale||0,pW=recs[1]?.priceWholesale||0;
+    const d=(years.length>1&&pW>0)?((cW-pW)/pW*100):null;
+    const gs=recs[0]?.gsStatus;
     return(
       <tr style={{borderBottom:'1px solid #f4f6f9'}}>
-        <td style={{padding:'7px 10px',fontWeight:500,fontSize:12}}>{brand}</td>
-        <td style={{padding:'7px 10px',textAlign:'center'}}>{gs?<span style={{fontSize:11,fontWeight:700,padding:'1px 7px',borderRadius:7,background:gsB[gs]||'#f9fafb',color:gsC[gs]||'#9ba3af'}}>{gs}</span>:<span style={{fontSize:11,color:'#d1d5db'}}>—</span>}</td>
-        <td style={{padding:'7px 10px',...sepCur,textAlign:'center',fontSize:11,color:'#6b7280'}}>{cur?.qty>0?cur.qty+'шт':'—'}</td>
-        <td style={{padding:'7px 10px',textAlign:'right',fontSize:12,fontWeight:cW>0?600:400,color:cW>0?'#2563eb':'#d1d5db'}}>{cW>0?'$'+cW.toLocaleString():'—'}</td>
-        <td style={{padding:'7px 10px',...sepPrev,textAlign:'center',fontSize:11,color:'#9ba3af'}}>{prev?.qty>0?prev.qty+'шт':'—'}</td>
-        <td style={{padding:'7px 10px',textAlign:'right',fontSize:11,color:'#9ba3af'}}>{pW>0?'$'+pW.toLocaleString():'—'}</td>
-        <td style={{padding:'7px 10px',textAlign:'right',fontSize:11}}>{d!==null?<span style={{fontWeight:600,color:d>0?'#16a34a':'#dc2626'}}>{d>0?'+':''}{Math.round(d)}%</span>:'—'}</td>
+        <td style={{padding:'6px 7px',fontWeight:500,fontSize:11,whiteSpace:'nowrap'}}>{brand}</td>
+        <td style={{padding:'6px 5px',textAlign:'center'}}>{gs?<span style={{fontSize:10,fontWeight:700,padding:'1px 6px',borderRadius:7,background:gsB[gs]||'#f9fafb',color:gsC[gs]||'#9ba3af',whiteSpace:'nowrap'}}>{gs}</span>:<span style={{fontSize:10,color:'#d1d5db'}}>—</span>}</td>
+        {years.map((y,i)=>{
+          const r=recs[i];const w=r?.priceWholesale||0;
+          return(
+            <React.Fragment key={y}>
+              <td style={{padding:'6px 5px',...sepY(i),textAlign:'center',fontSize:10,color:i===0?'#6b7280':'#9ba3af',whiteSpace:'nowrap'}}>{r?.qty>0?r.qty+'шт':'—'}</td>
+              <td style={{padding:'6px 7px',textAlign:'right',fontSize:i===0?11:10,fontWeight:i===0&&w>0?600:400,color:w>0?yC(i):'#d1d5db',whiteSpace:'nowrap'}}>{w>0?'$'+w.toLocaleString():'—'}</td>
+            </React.Fragment>
+          );
+        })}
+        <td style={{padding:'6px 7px',textAlign:'right',fontSize:10,whiteSpace:'nowrap'}}>{d!==null?<span style={{fontWeight:600,color:d>0?'#16a34a':'#dc2626'}}>{d>0?'+':''}{Math.round(d)}%</span>:'—'}</td>
       </tr>
     );
   }
   function SecTot({brands,label}){
-    const cW=brands.reduce((s,b)=>s+(curOO.find(o=>o.brand===b)?.priceWholesale||0),0);
-    const pW=brands.reduce((s,b)=>s+(prevOO.find(o=>o.brand===b)?.priceWholesale||0),0);
-    const d=pW>0?((cW-pW)/pW*100):null;
+    const sums=years.map(y=>brands.reduce((s,b)=>s+(byYear[y][b]?.priceWholesale||0),0));
+    const d=(years.length>1&&sums[1]>0)?((sums[0]-sums[1])/sums[1]*100):null;
     return(
       <tr style={{background:'#eff6ff',fontWeight:700}}>
-        <td style={{padding:'7px 10px',fontSize:11,color:'#1e40af'}}>{label}</td>
+        <td style={{padding:'6px 7px',fontSize:10,color:'#1e40af',whiteSpace:'nowrap'}}>{label}</td>
         <td></td>
-        <td style={{...sepCur}}></td>
-        <td style={{padding:'7px 10px',textAlign:'right',fontSize:12,color:'#1e40af'}}>{cW>0?'$'+cW.toLocaleString():'—'}</td>
-        <td style={{...sepPrev}}></td>
-        <td style={{padding:'7px 10px',textAlign:'right',fontSize:11,color:'#9ba3af'}}>{pW>0?'$'+pW.toLocaleString():'—'}</td>
-        <td style={{padding:'7px 10px',textAlign:'right',fontSize:11}}>{d!==null?<span style={{color:d>0?'#16a34a':'#dc2626'}}>{d>0?'+':''}{Math.round(d)}%</span>:'—'}</td>
+        {years.map((y,i)=>(
+          <React.Fragment key={y}>
+            <td style={{...sepY(i)}}></td>
+            <td style={{padding:'6px 7px',textAlign:'right',fontSize:i===0?11:10,color:i===0?'#1e40af':'#9ba3af',whiteSpace:'nowrap'}}>{sums[i]>0?'$'+sums[i].toLocaleString():'—'}</td>
+          </React.Fragment>
+        ))}
+        <td style={{padding:'6px 7px',textAlign:'right',fontSize:10,whiteSpace:'nowrap'}}>{d!==null?<span style={{color:d>0?'#16a34a':'#dc2626'}}>{d>0?'+':''}{Math.round(d)}%</span>:'—'}</td>
       </tr>
     );
+  }
+  function Section({brands,title,color,bg,label}){
+    if(!brands.length)return null;
+    return(<>
+      <tr><td colSpan={nCols} style={{padding:'4px 7px',fontSize:10,fontWeight:700,color,background:bg}}>{title}</td></tr>
+      {brands.map(b=><BLine key={b} brand={b}/>)}
+      {brands.length>1&&<SecTot brands={brands} label={label}/>}
+    </>);
   }
 
   return(
     <div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginBottom:14}}>
-        {[[`ОПТ ${fy.start}–${fy.end}`,'#2563eb',curTot>0?'$'+curTot.toLocaleString():'—'],[`ОПТ ${prevFy.start}–${prevFy.end}`,'#9ba3af',prevTot>0?'$'+prevTot.toLocaleString():'—'],['Динаміка',totD>0?'#16a34a':totD<0?'#dc2626':'#9ba3af',totD!==null?(totD>0?'+':'')+Math.round(totD)+'%':'—']].map(([l,c,v])=>(
-          <div key={l} className="kpi" style={{padding:'8px 12px'}}>
-            <div className="kpi-label">{l}</div>
-            <div style={{fontSize:15,fontWeight:700,color:c}}>{v}</div>
+      <div style={{display:'grid',gridTemplateColumns:`repeat(auto-fit,minmax(130px,1fr))`,gap:8,marginBottom:14}}>
+        {years.map((y,i)=>(
+          <div key={y} className="kpi" style={{padding:'8px 12px'}}>
+            <div className="kpi-label">ОПТ {y}–{y+1}</div>
+            <div style={{fontSize:14,fontWeight:700,color:yC(i)}}>{totByYear[y]>0?'$'+Math.round(totByYear[y]).toLocaleString():'—'}</div>
           </div>
         ))}
+        <div className="kpi" style={{padding:'8px 12px'}}>
+          <div className="kpi-label">Динаміка</div>
+          <div style={{fontSize:14,fontWeight:700,color:totD>0?'#16a34a':totD<0?'#dc2626':'#9ba3af'}}>{totD!==null?(totD>0?'+':'')+Math.round(totD)+'%':'—'}</div>
+        </div>
       </div>
-      <table style={{width:'100%',borderCollapse:'collapse'}}>
+      <div style={{overflowX:'auto',WebkitOverflowScrolling:'touch'}}>
+      <table style={{width:'100%',borderCollapse:'collapse',minWidth:300+years.length*150}}>
         <thead>
           <tr style={{background:'#f9fafb'}}>
             <th style={{...th,textAlign:'left',borderBottom:'1px solid #e8eaf0'}} rowSpan={2}>Бренд</th>
             <th style={{...th,textAlign:'center',borderBottom:'1px solid #e8eaf0'}} rowSpan={2}>Статус</th>
-            <th style={{...th,...sepCur,textAlign:'center',borderBottom:'1px solid #dbeafe',color:'#2563eb'}} colSpan={2}>{fy.start}–{fy.end}</th>
-            <th style={{...th,...sepPrev,textAlign:'center',borderBottom:'1px solid #e8eaf0',color:'#9ba3af'}} colSpan={2}>{prevFy.start}–{prevFy.end}</th>
+            {years.map((y,i)=>(
+              <th key={y} style={{...th,...sepY(i),textAlign:'center',borderBottom:i===0?'1px solid #dbeafe':'1px solid #e8eaf0',color:yC(i)}} colSpan={2}>{y}–{y+1}</th>
+            ))}
             <th style={{...th,textAlign:'right',borderBottom:'1px solid #e8eaf0'}} rowSpan={2}>Δ%</th>
           </tr>
           <tr style={{background:'#f9fafb'}}>
-            <th style={{...th,...sepCur,textAlign:'center'}}>К-во</th>
-            <th style={{...th,textAlign:'right'}}>ОПТ</th>
-            <th style={{...th,...sepPrev,textAlign:'center',color:'#9ba3af'}}>К-во</th>
-            <th style={{...th,textAlign:'right',color:'#9ba3af'}}>ОПТ</th>
+            {years.map((y,i)=>(
+              <React.Fragment key={y}>
+                <th style={{...th,...sepY(i),textAlign:'center',color:yC(i)}}>К-во</th>
+                <th style={{...th,textAlign:'right',color:yC(i)}}>ОПТ</th>
+              </React.Fragment>
+            ))}
           </tr>
         </thead>
         <tbody>
-          {bikeBrands.length>0&&<>
-            <tr><td colSpan={7} style={{padding:'5px 10px',fontSize:10,fontWeight:700,color:'#2563eb',background:'#eff6ff'}}>🚲 ВЕЛОСИПЕДИ</td></tr>
-            {bikeBrands.map(b=><BLine key={b} brand={b}/>)}
-            {bikeBrands.length>1&&<SecTot brands={bikeBrands} label="Велосипеди разом"/>}
-          </>}
-          {tireBrands.length>0&&<>
-            <tr><td colSpan={7} style={{padding:'5px 10px',fontSize:10,fontWeight:700,color:'#0891b2',background:'#ecfeff'}}>🔵 РЕЗИНА</td></tr>
-            {tireBrands.map(b=><BLine key={b} brand={b}/>)}
-            {tireBrands.length>1&&<SecTot brands={tireBrands} label="Резина разом"/>}
-          </>}
-          {toolBrands.length>0&&<>
-            <tr><td colSpan={7} style={{padding:'5px 10px',fontSize:10,fontWeight:700,color:'#d97706',background:'#fffbeb'}}>🔧 ІНСТРУМЕНТ</td></tr>
-            {toolBrands.map(b=><BLine key={b} brand={b}/>)}
-            {toolBrands.length>1&&<SecTot brands={toolBrands} label="Інструмент разом"/>}
-          </>}
-          {otherBrands.length>0&&<>
-            <tr><td colSpan={7} style={{padding:'5px 10px',fontSize:10,fontWeight:700,color:'#6b7280',background:'#f9fafb'}}>📦 ІНШЕ</td></tr>
-            {otherBrands.map(b=><BLine key={b} brand={b}/>)}
-            {otherBrands.length>1&&<SecTot brands={otherBrands} label="Інше разом"/>}
-          </>}
-          {(bikeBrands.length+tireBrands.length+toolBrands.length+otherBrands.length)>1&&(
+          <Section brands={bikeBrands} title="🚲 ВЕЛОСИПЕДИ" color="#2563eb" bg="#eff6ff" label="Велосипеди разом"/>
+          <Section brands={tireBrands} title="🔵 РЕЗИНА" color="#0891b2" bg="#ecfeff" label="Резина разом"/>
+          <Section brands={toolBrands} title="🔧 ІНСТРУМЕНТ" color="#d97706" bg="#fffbeb" label="Інструмент разом"/>
+          <Section brands={otherBrands} title="📦 ІНШЕ" color="#6b7280" bg="#f9fafb" label="Інше разом"/>
+          {allBrands.length>1&&(
             <tr style={{background:'#1e293b',fontWeight:800}}>
-              <td style={{padding:'8px 10px',fontSize:12,color:'#f1f5f9'}}>Разом</td>
+              <td style={{padding:'7px 7px',fontSize:11,color:'#f1f5f9'}}>Разом</td>
               <td></td>
-              <td style={{...sepCur}}></td>
-              <td style={{padding:'8px 10px',textAlign:'right',fontSize:12,color:'#e2e8f0'}}>{curTot>0?'$'+curTot.toLocaleString():'—'}</td>
-              <td style={{...sepPrev}}></td>
-              <td style={{padding:'8px 10px',textAlign:'right',fontSize:12,color:'#94a3b8'}}>{prevTot>0?'$'+prevTot.toLocaleString():'—'}</td>
-              <td style={{padding:'8px 10px',textAlign:'right',fontSize:12}}>{totD!==null?<span style={{color:totD>0?'#86efac':'#f87171'}}>{totD>0?'+':''}{Math.round(totD)}%</span>:'—'}</td>
+              {years.map((y,i)=>(
+                <React.Fragment key={y}>
+                  <td style={{...sepY(i)}}></td>
+                  <td style={{padding:'7px 7px',textAlign:'right',fontSize:11,color:i===0?'#e2e8f0':'#94a3b8',whiteSpace:'nowrap'}}>{totByYear[y]>0?'$'+Math.round(totByYear[y]).toLocaleString():'—'}</td>
+                </React.Fragment>
+              ))}
+              <td style={{padding:'7px 7px',textAlign:'right',fontSize:11}}>{totD!==null?<span style={{color:totD>0?'#86efac':'#f87171'}}>{totD>0?'+':''}{Math.round(totD)}%</span>:'—'}</td>
             </tr>
           )}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
