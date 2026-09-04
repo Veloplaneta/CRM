@@ -126,6 +126,10 @@ body.dark .mob-bottomnav{background:#161923;border-color:#2d3348}
   .mob-tabs::-webkit-scrollbar{display:none}
   .mob-tabs button{flex:0 0 auto;white-space:nowrap;padding:8px 10px!important;font-size:12px!important}
 
+  /* Графік обігу по фінроку: скрол замість стискання (як сезонність) */
+  .mob-fychart{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+  .mob-fychart>div{min-width:40px}
+
   /* UkraineMap: мобільний layout карти */
   .map-layout{height:calc(100vh - 165px)!important;height:calc(100dvh - 165px)!important;min-height:420px}
   .map-canvas-wrap{z-index:0}
@@ -3963,7 +3967,7 @@ function App(){
           <button onClick={()=>setDarkMode(p=>!p)} style={{fontSize:14,border:'none',background:'transparent',cursor:'pointer',padding:'4px 8px'}} title="Тема">{darkMode?'☀️':'🌙'}</button>
           <span className="mob-hide" style={{fontSize:12,padding:'3px 10px',borderRadius:20,...{background:si.bg,color:si.color}}}>{si.label}</span>
           {profile&&<div style={{display:'flex',alignItems:'center',gap:6,marginLeft:4}}>
-            <span style={{fontSize:11,padding:'3px 10px',borderRadius:20,background:profile.role==='director'?'#fef9c3':'#eff6ff',color:profile.role==='director'?'#92400e':'#1e40af',fontWeight:600,border:'1px solid '+(profile.role==='director'?'#fcd34d':'#bfdbfe')}}>
+            <span className="mob-hide" style={{fontSize:11,padding:'3px 10px',borderRadius:20,background:profile.role==='director'?'#fef9c3':'#eff6ff',color:profile.role==='director'?'#92400e':'#1e40af',fontWeight:600,border:'1px solid '+(profile.role==='director'?'#fcd34d':'#bfdbfe')}}>
               {profile.role==='director'?'👑':'👤'} {profile.name}
             </span>
             <button onClick={logout} title="Вийти" style={{fontSize:12,padding:'3px 8px',borderRadius:6,border:'1px solid #e2e5eb',background:'transparent',cursor:'pointer',color:'#9ba3af'}}>⏏</button>
@@ -5428,7 +5432,7 @@ function ClientDetail({client,clients,setClients,activities,setActivities,preOrd
                 );
               })()}
               {/* Paired bars */}
-              <div style={{display:'flex',alignItems:'flex-end',gap:3,height:130,marginBottom:4}}>
+              <div className="mob-fychart" style={{display:'flex',alignItems:'flex-end',gap:3,height:130,marginBottom:4}}>
                 {offHistData.map((d,i)=>{
                   const revH=d.rev>0?Math.max((d.rev/offMaxH)*110,4):0;
                   const payH=d.pay>0?Math.max((d.pay/offMaxH)*110,4):0;
@@ -7149,7 +7153,7 @@ function PreOrdersTab({client,preOrders}){
         </div>
       </div>
       <div style={{overflowX:'auto',WebkitOverflowScrolling:'touch'}}>
-      <table style={{width:'100%',borderCollapse:'collapse',minWidth:300+years.length*150}}>
+      <table style={{width:'100%',borderCollapse:'collapse',minWidth:210+years.length*115}}>
         <thead>
           <tr style={{background:'#f9fafb'}}>
             <th style={{...th,textAlign:'left',borderBottom:'1px solid #e8eaf0'}} rowSpan={2}>Бренд</th>
